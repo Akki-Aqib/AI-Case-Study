@@ -1,0 +1,1717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Crowd Control — Algorithmic Case Study</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --ink:#0a0f1e;
+  --paper:#f7f4ef;
+  --teal:#006b5e;
+  --teal-lt:#e0f0ed;
+  --gold:#c8960c;
+  --gold-lt:#fdf3d6;
+  --red:#c0392b;
+  --blue:#1a4fa0;
+  --blue-lt:#dce8fb;
+  --muted:#6b7280;
+  --border:#d4cfc8;
+  --card:#ffffff;
+  --shadow:0 4px 24px rgba(0,0,0,.08);
+  --r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:'DM Sans',sans-serif;
+  background:var(--paper);
+  color:var(--ink);
+  overflow-x:hidden;
+}
+
+/* ── HERO ─────────────────────────────────────────── */
+.hero{
+  position:relative;
+  min-height:100vh;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--ink);
+  overflow:hidden;
+}
+.hero-grid{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(0,107,94,.15) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,107,94,.15) 1px,transparent 1px);
+  background-size:48px 48px;
+  animation:gridShift 20s linear infinite;
+}
+@keyframes gridShift{to{background-position:48px 48px}}
+.hero-nodes{position:absolute;inset:0;pointer-events:none}
+.hero-content{
+  position:relative;z-index:2;
+  text-align:center;padding:2rem;
+}
+.badge{
+  display:inline-block;
+  border:1.5px solid var(--teal);
+  color:var(--teal);
+  font-size:.75rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;
+  padding:.35rem 1rem;border-radius:999px;
+  margin-bottom:1.5rem;
+  animation:fadeUp .8s ease both;
+}
+.hero h1{
+  font-family:'Playfair Display',serif;
+  font-size:clamp(2.5rem,7vw,5.5rem);
+  color:#fff;
+  line-height:1.05;
+  margin-bottom:1rem;
+  animation:fadeUp .8s .15s ease both;
+}
+.hero h1 span{color:var(--teal)}
+.hero p{
+  color:#9ca3af;
+  font-size:1.1rem;max-width:600px;margin:0 auto 2.5rem;
+  animation:fadeUp .8s .3s ease both;
+}
+.hero-stats{
+  display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;
+  animation:fadeUp .8s .45s ease both;
+}
+.hero-stat{
+  text-align:center;
+}
+.hero-stat .val{
+  font-family:'Playfair Display',serif;
+  font-size:2.2rem;color:#fff;font-weight:700;
+}
+.hero-stat .lbl{
+  font-size:.75rem;color:#6b7280;text-transform:uppercase;letter-spacing:.1em;
+}
+.scroll-hint{
+  position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);
+  color:#4b5563;font-size:.8rem;
+  animation:bounce 2s infinite;
+}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* ── CANVAS ANIMATION ─────────────────────────────── */
+#heroCanvas{position:absolute;inset:0;opacity:.5}
+
+/* ── SECTIONS ─────────────────────────────────────── */
+.section{padding:5rem 1.5rem;max-width:1100px;margin:0 auto}
+.section-tag{
+  font-size:.7rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--teal);margin-bottom:.5rem;
+}
+.section-title{
+  font-family:'Playfair Display',serif;
+  font-size:clamp(1.8rem,4vw,2.8rem);
+  line-height:1.15;margin-bottom:1rem;
+}
+.section-lead{
+  color:var(--muted);font-size:1.05rem;line-height:1.7;max-width:680px;
+}
+.divider{
+  width:48px;height:3px;background:var(--teal);
+  border-radius:2px;margin:1.2rem 0;
+}
+
+/* ── CARDS ────────────────────────────────────────── */
+.card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:1.75rem;
+  box-shadow:var(--shadow);
+  transition:transform .3s,box-shadow .3s;
+}
+.card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.12)}
+
+/* ── VENUE GRAPH ANIMATION ────────────────────────── */
+.venue-wrap{
+  background:var(--ink);
+  border-radius:var(--r);
+  overflow:hidden;
+  position:relative;
+}
+#venueCanvas{width:100%;display:block}
+.venue-legend{
+  display:flex;gap:1.5rem;flex-wrap:wrap;
+  padding:1rem 1.5rem;
+  background:rgba(255,255,255,.04);
+  border-top:1px solid rgba(255,255,255,.08);
+}
+.legend-item{display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:#9ca3af}
+.legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+
+/* ── ALGO TABS ────────────────────────────────────── */
+.algo-tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.algo-tab{
+  padding:.5rem 1.2rem;border-radius:999px;
+  border:1.5px solid var(--border);
+  background:transparent;
+  font-family:'DM Sans',sans-serif;
+  font-size:.85rem;font-weight:500;
+  cursor:pointer;transition:all .25s;
+}
+.algo-tab.active,.algo-tab:hover{
+  background:var(--teal);color:#fff;border-color:var(--teal);
+}
+.algo-panel{display:none}
+.algo-panel.active{display:block}
+
+/* ── BFS VISUALIZER ───────────────────────────────── */
+.grid-wrap{
+  display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap;
+}
+.bfs-grid{
+  display:grid;gap:4px;
+  flex-shrink:0;
+}
+.bfs-cell{
+  width:52px;height:52px;
+  border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;
+  font-size:.7rem;font-weight:600;
+  border:2px solid transparent;
+  transition:all .3s;
+  position:relative;
+  overflow:hidden;
+}
+.bfs-cell.empty{background:#f8fafc;border-color:#e2e8f0;color:#94a3b8}
+.bfs-cell.wall{background:#1e293b;border-color:#0f172a;color:#64748b}
+.bfs-cell.start{background:#006b5e;border-color:#004d44;color:#fff}
+.bfs-cell.goal{background:#c8960c;border-color:#a17209;color:#fff}
+.bfs-cell.visited{background:#dce8fb;border-color:#93c5fd;color:#1a4fa0}
+.bfs-cell.path{background:#006b5e;border-color:#004d44;color:#fff;transform:scale(1.05)}
+.bfs-cell.frontier{background:#e0f0ed;border-color:#006b5e;color:#006b5e;animation:pulse .6s infinite alternate}
+@keyframes pulse{to{transform:scale(1.08);background:#c5e4df}}
+
+.bfs-controls{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1rem}
+.btn{
+  padding:.55rem 1.25rem;border-radius:8px;
+  font-family:'DM Sans',sans-serif;
+  font-size:.85rem;font-weight:600;
+  cursor:pointer;border:none;transition:all .2s;
+}
+.btn-primary{background:var(--teal);color:#fff}
+.btn-primary:hover{background:#005049}
+.btn-secondary{background:var(--paper);color:var(--ink);border:1.5px solid var(--border)}
+.btn-secondary:hover{background:var(--border)}
+.btn-gold{background:var(--gold);color:#fff}
+.btn-gold:hover{background:#a17209}
+
+.algo-info{flex:1;min-width:240px}
+.algo-info h4{font-weight:600;margin-bottom:.5rem;font-size:.95rem}
+.step-log{
+  background:#f8fafc;border-radius:8px;padding:1rem;
+  font-family:'JetBrains Mono',monospace;font-size:.75rem;
+  height:200px;overflow-y:auto;border:1px solid var(--border);
+  line-height:1.8;color:#374151;
+}
+.log-entry{padding:.1rem 0}
+.log-entry.highlight{color:var(--teal);font-weight:600}
+.log-entry.found{color:var(--gold);font-weight:700}
+
+/* ── SA OPTIMIZER ─────────────────────────────────── */
+.sa-visual{display:flex;gap:1.5rem;flex-wrap:wrap;align-items:stretch}
+.sa-chart-wrap{flex:1;min-width:280px}
+.sa-bars{flex:1;min-width:220px}
+.bar-row{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem}
+.bar-label{font-size:.82rem;font-weight:500;width:36px;flex-shrink:0}
+.bar-track{flex:1;background:#f1f5f9;border-radius:999px;height:28px;overflow:hidden;position:relative}
+.bar-fill{
+  height:100%;border-radius:999px;
+  display:flex;align-items:center;padding-left:.75rem;
+  font-size:.75rem;font-weight:700;color:#fff;
+  transition:width 1s ease;
+  position:relative;
+}
+.bar-fill::after{
+  content:attr(data-val);
+  position:absolute;right:-48px;
+  font-size:.75rem;color:var(--ink);font-weight:600;
+}
+.capacity-marker{
+  position:absolute;right:20%;top:0;bottom:0;
+  width:2px;background:var(--red);opacity:.7;
+  z-index:2;
+}
+.capacity-marker::before{
+  content:'80%';
+  position:absolute;top:-18px;left:-16px;
+  font-size:.65rem;color:var(--red);font-weight:700;
+}
+
+/* ── STATS GRID ───────────────────────────────────── */
+.stats-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:1rem;margin-top:2rem;
+}
+.stat-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+  padding:1.5rem;text-align:center;
+  position:relative;overflow:hidden;
+}
+.stat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:var(--teal);
+}
+.stat-val{
+  font-family:'Playfair Display',serif;
+  font-size:2.4rem;font-weight:700;color:var(--teal);
+  line-height:1;margin-bottom:.4rem;
+}
+.stat-label{font-size:.8rem;color:var(--muted);font-weight:500}
+
+/* ── PROPERTIES TABLE ─────────────────────────────── */
+.prop-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.prop-table th{
+  background:var(--ink);color:#fff;
+  padding:.9rem 1rem;text-align:left;
+  font-weight:600;font-size:.8rem;letter-spacing:.05em;
+}
+.prop-table th:first-child{border-radius:8px 0 0 0}
+.prop-table th:last-child{border-radius:0 8px 0 0}
+.prop-table td{
+  padding:.8rem 1rem;border-bottom:1px solid var(--border);
+  vertical-align:top;line-height:1.5;
+}
+.prop-table tr:last-child td{border-bottom:none}
+.prop-table tr:nth-child(even) td{background:#fafaf8}
+.prop-table tr:hover td{background:var(--teal-lt)}
+.badge-prop{
+  display:inline-block;padding:.2rem .7rem;border-radius:999px;
+  font-size:.75rem;font-weight:600;
+}
+.badge-green{background:var(--teal-lt);color:var(--teal)}
+.badge-gold{background:var(--gold-lt);color:#92700a}
+.badge-blue{background:var(--blue-lt);color:var(--blue)}
+
+/* ── CODE BLOCK ───────────────────────────────────── */
+.code-block{
+  background:#0f1117;border-radius:10px;
+  overflow:hidden;margin:1rem 0;
+}
+.code-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.6rem 1rem;background:rgba(255,255,255,.04);
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+.code-dots{display:flex;gap:.4rem}
+.code-dot{width:10px;height:10px;border-radius:50%}
+.code-lang{font-size:.7rem;color:#6b7280;font-family:'JetBrains Mono',monospace}
+.code-body{
+  padding:1.2rem;
+  font-family:'JetBrains Mono',monospace;
+  font-size:.8rem;line-height:1.7;
+  color:#e2e8f0;overflow-x:auto;
+}
+.kw{color:#c792ea}.fn{color:#82aaff}.cm{color:#546e7a;font-style:italic}
+.st{color:#c3e88d}.nm{color:#f78c6c}.op{color:#89ddff}
+
+/* ── COMPLEXITY TABLE ─────────────────────────────── */
+.complexity-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;
+  margin-top:1.5rem;
+}
+.complexity-card{
+  border-radius:var(--r);padding:1.25rem;
+  border:1.5px solid var(--border);background:var(--card);
+  position:relative;overflow:hidden;
+}
+.complexity-card.bfs{border-top:3px solid var(--teal)}
+.complexity-card.bidir{border-top:3px solid var(--blue)}
+.complexity-card.sa{border-top:3px solid var(--gold)}
+.complexity-card h4{font-size:.9rem;font-weight:700;margin-bottom:.75rem}
+.complexity-row{display:flex;justify-content:space-between;align-items:center;
+  padding:.3rem 0;border-bottom:1px solid #f1f5f9;font-size:.82rem}
+.complexity-row:last-child{border-bottom:none}
+.complexity-row .key{color:var(--muted)}
+.complexity-row .val{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--teal)}
+
+/* ── LIMITATIONS ──────────────────────────────────── */
+.lim-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-top:1.5rem}
+.lim-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+  padding:1.5rem;position:relative;overflow:hidden;
+}
+.lim-card::after{
+  content:attr(data-icon);
+  position:absolute;top:.75rem;right:1rem;
+  font-size:1.8rem;opacity:.12;
+}
+.lim-card h4{font-size:.9rem;font-weight:700;margin-bottom:.5rem}
+.lim-card p{font-size:.85rem;color:var(--muted);line-height:1.6}
+
+/* ── PIPELINE ─────────────────────────────────────── */
+.pipeline{display:flex;flex-direction:column;gap:0}
+.pipe-step{
+  display:flex;gap:1.25rem;align-items:flex-start;
+  padding:1.5rem;
+  background:var(--card);border:1px solid var(--border);
+  position:relative;
+}
+.pipe-step:first-child{border-radius:var(--r) var(--r) 0 0}
+.pipe-step:last-child{border-radius:0 0 var(--r) var(--r)}
+.pipe-step:not(:last-child)::after{
+  content:'';
+  position:absolute;bottom:-1px;left:2.5rem;
+  width:2px;height:1px;background:var(--border);
+  z-index:1;
+}
+.pipe-num{
+  width:36px;height:36px;border-radius:50%;
+  background:var(--teal);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:.9rem;flex-shrink:0;
+}
+.pipe-body h4{font-weight:700;font-size:.95rem;margin-bottom:.3rem}
+.pipe-body p{font-size:.85rem;color:var(--muted);line-height:1.6}
+.pipe-arrow{
+  display:flex;justify-content:center;padding:.4rem 0;
+  background:transparent;border-left:1px solid var(--border);
+  border-right:1px solid var(--border);
+  margin-left:2.5rem;
+}
+
+/* ── CONCLUSION ───────────────────────────────────── */
+.conclusion-box{
+  background:var(--ink);color:#fff;border-radius:var(--r);
+  padding:3rem;position:relative;overflow:hidden;
+}
+.conclusion-box::before{
+  content:'';position:absolute;
+  top:-60px;right:-60px;
+  width:200px;height:200px;
+  background:radial-gradient(circle,rgba(0,107,94,.4),transparent 70%);
+}
+.takeaway{
+  display:flex;gap:.75rem;align-items:flex-start;
+  padding:.75rem 0;border-bottom:1px solid rgba(255,255,255,.08);
+  font-size:.9rem;line-height:1.5;
+}
+.takeaway:last-child{border-bottom:none}
+.takeaway-num{
+  font-family:'JetBrains Mono',monospace;
+  font-size:.75rem;color:var(--teal);font-weight:700;
+  padding-top:.1rem;flex-shrink:0;
+}
+
+/* ── SCROLL REVEAL ────────────────────────────────── */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
+.reveal.visible{opacity:1;transform:none}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+
+/* ── NAV ──────────────────────────────────────────── */
+.topnav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(10,15,30,.85);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(255,255,255,.06);
+  padding:.75rem 2rem;
+  display:flex;align-items:center;gap:2rem;
+  transform:translateY(-100%);
+  transition:transform .4s ease;
+}
+.topnav.visible{transform:none}
+.topnav-brand{
+  font-family:'Playfair Display',serif;
+  color:#fff;font-size:1rem;white-space:nowrap;
+}
+.topnav-links{display:flex;gap:1.5rem;overflow-x:auto}
+.topnav-links a{
+  color:#9ca3af;font-size:.82rem;text-decoration:none;
+  white-space:nowrap;transition:color .2s;
+}
+.topnav-links a:hover{color:var(--teal)}
+
+/* ── PROGRESS BAR ─────────────────────────────────── */
+#progress{
+  position:fixed;top:0;left:0;height:2px;
+  background:var(--teal);z-index:200;
+  width:0%;transition:width .1s;
+}
+
+/* ── RESPONSIVE ───────────────────────────────────── */
+@media(max-width:640px){
+  .grid-wrap{flex-direction:column}
+  .bfs-cell{width:40px;height:40px;font-size:.6rem}
+  .sa-visual{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<nav class="topnav" id="topnav">
+  <div class="topnav-brand">Crowd Control</div>
+  <div class="topnav-links">
+    <a href="#intro">Introduction</a>
+    <a href="#problem">Problem</a>
+    <a href="#algorithms">Algorithms</a>
+    <a href="#system">System</a>
+    <a href="#results">Results</a>
+    <a href="#conclusion">Conclusion</a>
+  </div>
+</nav>
+
+<!-- ══ HERO ══════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-grid"></div>
+  <canvas id="heroCanvas"></canvas>
+  <div class="hero-content">
+    <div class="badge">Academic Case Study · CSEN2031</div>
+    <h1>Crowd Control<br/>in <span>Large Events</span></h1>
+    <p>Using Graph Algorithms & Optimization Techniques — BFS, Bidirectional Search & Simulated Annealing for real-time evacuation routing.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="val">80K+</div><div class="lbl">Spectators</div></div>
+      <div class="hero-stat"><div class="val">3</div><div class="lbl">Algorithms</div></div>
+      <div class="hero-stat"><div class="val">O(V+E)</div><div class="lbl">BFS Complexity</div></div>
+      <div class="hero-stat"><div class="val">512×</div><div class="lbl">BiDir Speedup</div></div>
+    </div>
+  </div>
+  <div class="scroll-hint">↓ scroll to explore</div>
+</section>
+
+<!-- ══ INTRO ═════════════════════════════════════════ -->
+<div id="intro" style="background:#fff;border-bottom:1px solid var(--border)">
+<div class="section reveal">
+  <div class="section-tag">01 — Introduction</div>
+  <h2 class="section-title">Why Crowd Management<br/>Demands Intelligence</h2>
+  <div class="divider"></div>
+  <p class="section-lead">Millions attend concerts, stadiums, and festivals every year. Without intelligent, real-time routing systems, emergency evacuations collapse into fatal bottlenecks.</p>
+
+  <div class="stats-grid" style="margin-top:2.5rem">
+    <div class="stat-card">
+      <div class="stat-val" data-count="80000">0</div>
+      <div class="stat-label">Stadium Capacity</div>
+    </div>
+    <div class="stat-card" style="--teal:#1a4fa0">
+      <div class="stat-val" style="color:var(--blue)" data-count="200">0</div>
+      <div class="stat-label">Venue Graph Nodes</div>
+    </div>
+    <div class="stat-card" style="--teal:#c8960c">
+      <div class="stat-val" style="color:var(--gold)" data-count="512">0</div>
+      <div class="stat-label">BiDir Search Speedup ×</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" data-count="3">0</div>
+      <div class="stat-label">Core Algorithms</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.25rem;margin-top:2rem">
+    <div class="card">
+      <div style="font-size:2rem;margin-bottom:.75rem">🚨</div>
+      <h3 style="font-weight:700;font-size:1rem;margin-bottom:.5rem">The Problem</h3>
+      <p style="font-size:.875rem;color:var(--muted);line-height:1.6">When 80,000 people simultaneously attempt to exit, dangerous bottlenecks form within seconds at popular gates — without intelligent routing.</p>
+    </div>
+    <div class="card">
+      <div style="font-size:2rem;margin-bottom:.75rem">🧠</div>
+      <h3 style="font-weight:700;font-size:1rem;margin-bottom:.5rem">The Solution</h3>
+      <p style="font-size:.875rem;color:var(--muted);line-height:1.6">Model the venue as a weighted graph and apply BFS, Bidirectional Search, and Simulated Annealing for real-time path discovery and flow optimization.</p>
+    </div>
+    <div class="card">
+      <div style="font-size:2rem;margin-bottom:.75rem">⚡</div>
+      <h3 style="font-weight:700;font-size:1rem;margin-bottom:.5rem">The Impact</h3>
+      <p style="font-size:.875rem;color:var(--muted);line-height:1.6">Dynamic routes computed in microseconds, crowd densities maintained below danger thresholds, stampede conditions proactively prevented.</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ PROBLEM ════════════════════════════════════════ -->
+<div id="problem">
+<div class="section reveal">
+  <div class="section-tag">02 — Problem Description</div>
+  <h2 class="section-title">Venue Graph & Dynamic<br/>Edge Weighting</h2>
+  <div class="divider"></div>
+  <p class="section-lead">The stadium is modeled as a weighted graph G = (V, E) where nodes are locations and edges are corridors. Weights update every 5–30 seconds based on live sensor data.</p>
+
+  <!-- LIVE VENUE ANIMATION -->
+  <div class="venue-wrap reveal" style="margin-top:2rem">
+    <canvas id="venueCanvas" height="420"></canvas>
+    <div class="venue-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Entry Gate</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div>Junction</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>Exit</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Congested</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgba(255,255,255,.3)"></div>Crowd Particle</div>
+      <div style="margin-left:auto;color:#6b7280;font-size:.75rem;font-family:'JetBrains Mono',monospace">Live Simulation ▶</div>
+    </div>
+  </div>
+
+  <!-- Graph Element Table -->
+  <div style="margin-top:2.5rem" class="reveal">
+    <h3 style="font-weight:700;margin-bottom:1rem;font-size:1.05rem">Graph Model Elements</h3>
+    <table class="prop-table">
+      <tr><th>Element</th><th>Symbol</th><th>Description</th><th>Type</th></tr>
+      <tr>
+        <td><strong>Vertex Set</strong></td><td><code>V</code></td>
+        <td>Entry gates, corridor junctions, halls, emergency exits. A typical stadium yields 50–200 nodes.</td>
+        <td><span class="badge-prop badge-green">Nodes</span></td>
+      </tr>
+      <tr>
+        <td><strong>Edge Set</strong></td><td><code>E</code></td>
+        <td>Each passageway or corridor connecting two locations. Represents traversable pedestrian routes.</td>
+        <td><span class="badge-prop badge-blue">Edges</span></td>
+      </tr>
+      <tr>
+        <td><strong>Edge Weight</strong></td><td><code>w(u,v)</code></td>
+        <td>Composite of base distance + congestion penalty + capacity factor. Updated dynamically.</td>
+        <td><span class="badge-prop badge-gold">Dynamic</span></td>
+      </tr>
+      <tr>
+        <td><strong>Node Capacity</strong></td><td><code>C(v)</code></td>
+        <td>Maximum safe occupancy at node v at any time.</td>
+        <td><span class="badge-prop badge-green">Static</span></td>
+      </tr>
+      <tr>
+        <td><strong>Crowd Density</strong></td><td><code>D(v,t)</code></td>
+        <td>Current occupancy from IoT sensors and cameras. Changes every cycle.</td>
+        <td><span class="badge-prop badge-gold">Real-time</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Dynamic weight formula -->
+  <div class="card reveal" style="margin-top:1.5rem;background:var(--ink);color:#e2e8f0;border-color:#1f2937">
+    <div style="font-size:.75rem;color:#6b7280;font-family:'JetBrains Mono',monospace;margin-bottom:.75rem">DYNAMIC WEIGHT FORMULA</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:.95rem;line-height:2;color:#e2e8f0">
+      w<span style="color:#10b981">_dynamic</span>(u, v, t)  =  base_distance(u,v)<br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+  <span style="color:#f59e0b">congestion_penalty</span>(u,v,t)<br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+  capacity_factor(u,v)<br/><br/>
+      <span style="color:#6b7280">// where:</span><br/>
+      <span style="color:#f59e0b">congestion_penalty</span>  =  α × (current_load / max_capacity)<br/>
+      α  =  <span style="color:#c792ea">tunable congestion sensitivity parameter</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ ALGORITHMS ═════════════════════════════════════ -->
+<div id="algorithms" style="background:#fff;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+<div class="section reveal">
+  <div class="section-tag">03 — Algorithms</div>
+  <h2 class="section-title">Three Algorithms,<br/>One Unified System</h2>
+  <div class="divider"></div>
+  <p class="section-lead">Each algorithm serves a complementary role — from rapid path discovery to global flow optimization. Use the interactive visualizer below to see them in action.</p>
+
+  <div class="algo-tabs" style="margin-top:2rem">
+    <button class="algo-tab active" onclick="switchAlgo('bfs')">BFS Search</button>
+    <button class="algo-tab" onclick="switchAlgo('bidir')">Bidirectional</button>
+    <button class="algo-tab" onclick="switchAlgo('gbfs')">Greedy BFS</button>
+    <button class="algo-tab" onclick="switchAlgo('dfs')">DFS</button>
+    <button class="algo-tab" onclick="switchAlgo('ucs')">UCS</button>
+    <button class="algo-tab" onclick="switchAlgo('astar')">A* Search</button>
+    <button class="algo-tab" onclick="switchAlgo('sa')">Simulated Annealing</button>
+  </div>
+
+  <!-- BFS Panel -->
+  <div class="algo-panel active card" id="panel-bfs">
+    <h3 style="font-weight:700;margin-bottom:.3rem">Breadth-First Search (BFS)</h3>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:1.25rem">Explores all nodes level-by-level. Guarantees the shortest hop-path from entry to exit. <strong>O(V+E)</strong> time complexity.</p>
+    <div class="grid-wrap">
+      <div>
+        <div class="bfs-grid" id="bfsGrid" style="grid-template-columns:repeat(8,52px)"></div>
+        <div class="bfs-controls">
+          <button class="btn btn-primary" onclick="runBFS()">▶ Run BFS</button>
+          <button class="btn btn-secondary" onclick="resetGrid('bfs')">↺ Reset</button>
+          <select id="bfsSpeed" style="padding:.4rem .75rem;border-radius:8px;border:1.5px solid var(--border);font-family:'DM Sans',sans-serif;font-size:.82rem">
+            <option value="300">Slow</option>
+            <option value="120" selected>Normal</option>
+            <option value="40">Fast</option>
+          </select>
+        </div>
+        <div style="margin-top:.75rem;font-size:.8rem;color:var(--muted)">
+          🟢 Start &nbsp; 🟡 Goal &nbsp; ⬛ Wall &nbsp; 🔵 Visiting &nbsp; 🟩 Shortest Path
+        </div>
+      </div>
+      <div class="algo-info">
+        <h4>Execution Log</h4>
+        <div class="step-log" id="bfsLog"><div class="log-entry" style="color:#9ca3af">Press ▶ Run BFS to start…</div></div>
+        <div style="margin-top:1rem;display:grid;grid-template-columns:1fr 1fr;gap:.5rem;font-size:.8rem">
+          <div class="card" style="padding:.75rem;text-align:center">
+            <div style="font-weight:700;font-size:1.3rem;color:var(--teal)" id="bfsVisitedCount">0</div>
+            <div style="color:var(--muted)">Nodes Visited</div>
+          </div>
+          <div class="card" style="padding:.75rem;text-align:center">
+            <div style="font-weight:700;font-size:1.3rem;color:var(--gold)" id="bfsPathLen">0</div>
+            <div style="color:var(--muted)">Path Length</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bidirectional Panel -->
+  <div class="algo-panel card" id="panel-bidir">
+    <h3 style="font-weight:700;margin-bottom:.3rem">Bidirectional Search</h3>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:1.25rem">Launches two simultaneous frontiers — forward from start, backward from goal. Meets in the middle. Exponentially fewer nodes explored: <strong>~b^(d/2)</strong> vs b^d.</p>
+    <div class="grid-wrap">
+      <div>
+        <div class="bfs-grid" id="bidirGrid" style="grid-template-columns:repeat(8,52px)"></div>
+        <div class="bfs-controls">
+          <button class="btn btn-primary" onclick="runBidir()">▶ Run Bidirectional</button>
+          <button class="btn btn-secondary" onclick="resetGrid('bidir')">↺ Reset</button>
+        </div>
+        <div style="margin-top:.75rem;font-size:.8rem;color:var(--muted)">
+          🟢 Forward frontier &nbsp; 🔵 Backward frontier &nbsp; 🟡 Meeting point
+        </div>
+      </div>
+      <div class="algo-info">
+        <h4>Execution Log</h4>
+        <div class="step-log" id="bidirLog"><div class="log-entry" style="color:#9ca3af">Press ▶ Run Bidirectional to start…</div></div>
+        <div style="margin-top:1rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;font-size:.8rem">
+          <div class="card" style="padding:.75rem;text-align:center">
+            <div style="font-weight:700;font-size:1.1rem;color:var(--teal)" id="bidirFwd">0</div>
+            <div style="color:var(--muted);font-size:.72rem">Fwd Nodes</div>
+          </div>
+          <div class="card" style="padding:.75rem;text-align:center">
+            <div style="font-weight:700;font-size:1.1rem;color:var(--blue)" id="bidirBwd">0</div>
+            <div style="color:var(--muted);font-size:.72rem">Bwd Nodes</div>
+          </div>
+          <div class="card" style="padding:.75rem;text-align:center">
+            <div style="font-weight:700;font-size:1.1rem;color:var(--gold)" id="bidirPath">0</div>
+            <div style="color:var(--muted);font-size:.72rem">Path Len</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GBFS Panel -->
+  <div class="algo-panel card" id="panel-gbfs">
+    <h3 style="font-weight:700;margin-bottom:.3rem">Greedy Best-First Search (GBFS)</h3>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:1.25rem">Always expands the node <em>closest to the goal</em> using Manhattan Distance heuristic h(n). Fast but not guaranteed optimal — may get trapped.</p>
+    <div class="grid-wrap">
+      <div>
+        <div class="bfs-grid" id="gbfsGrid" style="grid-template-columns:repeat(8,52px)"></div>
+        <div class="bfs-controls">
+          <button class="btn btn-primary" onclick="runGBFS()">▶ Run GBFS</button>
+          <button class="btn btn-secondary" onclick="resetGrid('gbfs')">↺ Reset</button>
+        </div>
+      </div>
+      <div class="algo-info">
+        <h4>Execution Log</h4>
+        <div class="step-log" id="gbfsLog"><div class="log-entry" style="color:#9ca3af">Press ▶ Run GBFS to start…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DFS Panel -->
+  <div class="algo-panel card" id="panel-dfs">
+    <h3 style="font-weight:700;margin-bottom:.3rem">Depth-First Search (DFS)</h3>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:1.25rem">Explores one path deeply before backtracking. Does <strong>not</strong> guarantee shortest path. Useful for exploring all possible routes.</p>
+    <div class="grid-wrap">
+      <div>
+        <div class="bfs-grid" id="dfsGrid" style="grid-template-columns:repeat(8,52px)"></div>
+        <div class="bfs-controls">
+          <button class="btn btn-primary" onclick="runDFS()">▶ Run DFS</button>
+          <button class="btn btn-secondary" onclick="resetGrid('dfs')">↺ Reset</button>
+        </div>
+      </div>
+      <div class="algo-info">
+        <h4>Execution Log</h4>
+        <div class="step-log" id="dfsLog"><div class="log-entry" style="color:#9ca3af">Press ▶ Run DFS to start…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- UCS Panel -->
+  <div class="algo-panel card" id="panel-ucs">
+    <h3 style="font-weight:700;margin-bottom:.3rem">Uniform Cost Search (UCS)</h3>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:1.25rem">Expands the node with the lowest cumulative path cost. Optimal for weighted graphs. No heuristic — guaranteed shortest weighted path.</p>
+    <div class="grid-wrap">
+      <div>
+        <div class="bfs-grid" id="ucsGrid" style="grid-template-columns:repeat(8,52px)"></div>
+        <div class="bfs-controls">
+          <button class="btn btn-primary" onclick="runUCS()">▶ Run UCS</button>
+          <button class="btn btn-secondary" onclick="resetGrid('ucs')">↺ Reset</button>
+        </div>
+      </div>
+      <div class="algo-info">
+        <h4>Execution Log</h4>
+        <div class="step-log" id="ucsLog"><div class="log-entry" style="color:#9ca3af">Press ▶ Run UCS to start…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A* Panel -->
+  <div class="algo-panel card" id="panel-astar">
+    <h3 style="font-weight:700;margin-bottom:.3rem">A* Search Algorithm</h3>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:1.25rem">Combines g(n) actual cost + h(n) heuristic. <strong>f(n) = g(n) + h(n)</strong>. Optimal AND efficient — the gold standard for pathfinding.</p>
+    <div class="grid-wrap">
+      <div>
+        <div class="bfs-grid" id="astarGrid" style="grid-template-columns:repeat(8,52px)"></div>
+        <div class="bfs-controls">
+          <button class="btn btn-gold" onclick="runAstar()">▶ Run A*</button>
+          <button class="btn btn-secondary" onclick="resetGrid('astar')">↺ Reset</button>
+        </div>
+        <div style="margin-top:.75rem;font-size:.8rem;color:var(--muted)">Numbers show f(n) cost estimate</div>
+      </div>
+      <div class="algo-info">
+        <h4>Execution Log</h4>
+        <div class="step-log" id="astarLog"><div class="log-entry" style="color:#9ca3af">Press ▶ Run A* to start…</div></div>
+        <div class="code-block" style="margin-top:.75rem">
+          <div class="code-header">
+            <div class="code-dots"><div class="code-dot" style="background:#ff5f57"></div><div class="code-dot" style="background:#febc2e"></div><div class="code-dot" style="background:#28c840"></div></div>
+            <div class="code-lang">python</div>
+          </div>
+          <div class="code-body"><span class="cm"># f(n) = g(n) + h(n)</span>
+<span class="kw">def</span> <span class="fn">heuristic</span>(a, b):
+    <span class="kw">return</span> <span class="fn">abs</span>(a[<span class="nm">0</span>]-b[<span class="nm">0</span>]) + <span class="fn">abs</span>(a[<span class="nm">1</span>]-b[<span class="nm">1</span>])
+
+<span class="cm"># Manhattan Distance for h(n)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SA Panel -->
+  <div class="algo-panel card" id="panel-sa">
+    <h3 style="font-weight:700;margin-bottom:.3rem">Simulated Annealing — Flow Optimization</h3>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:1.25rem">Distributes 1,000 people across exits E1, E2, E3 (capacities: 500, 400, 300). Cost function penalizes any exit exceeding <strong>80% capacity</strong>. Watch the optimizer converge.</p>
+    <div class="sa-visual">
+      <div class="sa-chart-wrap">
+        <canvas id="saChart" height="220"></canvas>
+        <div class="bfs-controls" style="margin-top:.75rem">
+          <button class="btn btn-primary" onclick="runSA()">▶ Run SA Optimizer</button>
+          <button class="btn btn-secondary" onclick="resetSA()">↺ Reset</button>
+        </div>
+        <div style="margin-top:.75rem;font-size:.8rem;color:var(--muted)">
+          Temperature: <strong id="saTemp">1000</strong> &nbsp;|&nbsp; Cost: <strong id="saCost">—</strong> &nbsp;|&nbsp; Iteration: <strong id="saIter">0</strong>
+        </div>
+      </div>
+      <div class="sa-bars" style="padding-top:.5rem">
+        <h4 style="font-size:.85rem;font-weight:700;margin-bottom:1rem">Exit Load Distribution</h4>
+        <div class="bar-row">
+          <div class="bar-label">E1</div>
+          <div class="bar-track">
+            <div class="bar-fill" id="saBarE1" style="width:80%;background:#ef4444" data-val="400/500">400/500</div>
+            <div class="capacity-marker"></div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">E2</div>
+          <div class="bar-track">
+            <div class="bar-fill" id="saBarE2" style="width:87.5%;background:#ef4444" data-val="350/400">350/400</div>
+            <div class="capacity-marker"></div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">E3</div>
+          <div class="bar-track">
+            <div class="bar-fill" id="saBarE3" style="width:83.3%;background:#ef4444" data-val="250/300">250/300</div>
+            <div class="capacity-marker"></div>
+          </div>
+        </div>
+        <div style="margin-top:1.5rem;padding:1rem;background:var(--teal-lt);border-radius:8px;font-size:.82rem">
+          <strong>Optimal target:</strong><br/>
+          E1: 390/500 (78%) · E2: 310/400 (77.5%) · E3: 300/300 (100%)<br/>
+          <span style="color:var(--teal);font-weight:600">→ All exits below 80% — Cost: 0 ✓</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Complexity comparison -->
+  <div style="margin-top:2.5rem" class="reveal">
+    <h3 style="font-weight:700;margin-bottom:1rem;font-size:1.05rem">Algorithm Complexity Comparison</h3>
+    <div class="complexity-grid">
+      <div class="complexity-card bfs">
+        <h4>BFS</h4>
+        <div class="complexity-row"><span class="key">Time</span><span class="val">O(V+E)</span></div>
+        <div class="complexity-row"><span class="key">Space</span><span class="val">O(V)</span></div>
+        <div class="complexity-row"><span class="key">Optimal?</span><span class="val">Hop ✓</span></div>
+        <div class="complexity-row"><span class="key">Complete?</span><span class="val">Yes ✓</span></div>
+      </div>
+      <div class="complexity-card bidir">
+        <h4>Bidirectional</h4>
+        <div class="complexity-row"><span class="key">Time</span><span class="val">O(b^(d/2))</span></div>
+        <div class="complexity-row"><span class="key">Space</span><span class="val">O(b^(d/2))</span></div>
+        <div class="complexity-row"><span class="key">Speedup</span><span class="val">~512×</span></div>
+        <div class="complexity-row"><span class="key">Complete?</span><span class="val">Yes ✓</span></div>
+      </div>
+      <div class="complexity-card" style="border-top-color:#c0392b">
+        <h4>GBFS</h4>
+        <div class="complexity-row"><span class="key">Time</span><span class="val">O(b^m)</span></div>
+        <div class="complexity-row"><span class="key">Space</span><span class="val">O(b^m)</span></div>
+        <div class="complexity-row"><span class="key">Optimal?</span><span class="val">No ✗</span></div>
+        <div class="complexity-row"><span class="key">Heuristic</span><span class="val">h(n)</span></div>
+      </div>
+      <div class="complexity-card" style="border-top-color:#6b7280">
+        <h4>DFS</h4>
+        <div class="complexity-row"><span class="key">Time</span><span class="val">O(V+E)</span></div>
+        <div class="complexity-row"><span class="key">Space</span><span class="val">O(V)</span></div>
+        <div class="complexity-row"><span class="key">Optimal?</span><span class="val">No ✗</span></div>
+        <div class="complexity-row"><span class="key">Complete?</span><span class="val">No ✗</span></div>
+      </div>
+      <div class="complexity-card" style="border-top-color:#059669">
+        <h4>UCS</h4>
+        <div class="complexity-row"><span class="key">Time</span><span class="val">O(b^(C*/ε))</span></div>
+        <div class="complexity-row"><span class="key">Optimal?</span><span class="val">Yes ✓</span></div>
+        <div class="complexity-row"><span class="key">Heuristic</span><span class="val">None</span></div>
+        <div class="complexity-row"><span class="key">Complete?</span><span class="val">Yes ✓</span></div>
+      </div>
+      <div class="complexity-card sa">
+        <h4>A* / SA</h4>
+        <div class="complexity-row"><span class="key">A* Time</span><span class="val">O(b^d)</span></div>
+        <div class="complexity-row"><span class="key">A* Optimal?</span><span class="val">Yes ✓</span></div>
+        <div class="complexity-row"><span class="key">SA Type</span><span class="val">Metaheur.</span></div>
+        <div class="complexity-row"><span class="key">SA Optimal?</span><span class="val">Near ✓</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ SYSTEM DESIGN ══════════════════════════════════ -->
+<div id="system">
+<div class="section reveal">
+  <div class="section-tag">04 — System Design</div>
+  <h2 class="section-title">Four-Stage Processing<br/>Pipeline</h2>
+  <div class="divider"></div>
+  <p class="section-lead">The real-time system integrates graph construction, pathfinding, and optimization into a unified four-stage pipeline that operates continuously during events.</p>
+
+  <div class="pipeline reveal" style="margin-top:2rem">
+    <div class="pipe-step">
+      <div class="pipe-num">1</div>
+      <div class="pipe-body">
+        <h4>Graph Construction & Update</h4>
+        <p>Build or refresh the weighted graph using latest sensor data. Recalculate all dynamic edge weights based on current congestion. Disable edges/nodes flagged as hazardous or blocked.</p>
+      </div>
+    </div>
+    <div class="pipe-arrow">↓</div>
+    <div class="pipe-step">
+      <div class="pipe-num">2</div>
+      <div class="pipe-body">
+        <h4>Pathfinding — BFS & Bidirectional Search</h4>
+        <p>Execute BFS for rapid proximity-based exit discovery. Run Bidirectional Search for optimal route computation on the full graph. Produce shortest-path candidates for each occupied zone.</p>
+      </div>
+    </div>
+    <div class="pipe-arrow">↓</div>
+    <div class="pipe-step">
+      <div class="pipe-num">3</div>
+      <div class="pipe-body">
+        <h4>Flow Optimization — Simulated Annealing</h4>
+        <p>Apply SA to the current routing assignment. Iteratively perturb crowd distribution across exits. Minimize global congestion cost function. Output optimized flow allocation per exit/corridor.</p>
+      </div>
+    </div>
+    <div class="pipe-arrow">↓</div>
+    <div class="pipe-step">
+      <div class="pipe-num">4</div>
+      <div class="pipe-body">
+        <h4>Guidance Generation</h4>
+        <p>Translate optimized routes into actionable guidance: LED signage updates, PA announcements, mobile app push notifications, and security personnel instructions.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Environment Table -->
+  <div style="margin-top:2.5rem" class="reveal">
+    <h3 style="font-weight:700;margin-bottom:1rem;font-size:1.05rem">Task Environment Properties</h3>
+    <table class="prop-table">
+      <tr><th>Property</th><th>Classification</th><th>Explanation</th></tr>
+      <tr><td><strong>Observable</strong></td><td><span class="badge-prop badge-green">Fully Observable</span></td><td>The system sees the entire venue graph with crowd densities at all times via sensors.</td></tr>
+      <tr><td><strong>Determinism</strong></td><td><span class="badge-prop badge-gold">Stochastic</span></td><td>Crowd movement changes dynamically and is not fully predictable.</td></tr>
+      <tr><td><strong>Episodic</strong></td><td><span class="badge-prop badge-blue">Sequential</span></td><td>Routing decisions affect future crowd flow and congestion.</td></tr>
+      <tr><td><strong>Environment</strong></td><td><span class="badge-prop badge-gold">Dynamic</span></td><td>The environment changes continuously as crowds move through corridors.</td></tr>
+      <tr><td><strong>State Space</strong></td><td><span class="badge-prop badge-green">Discrete</span></td><td>The venue is modeled as a fixed graph with discrete nodes and edges.</td></tr>
+      <tr><td><strong>Agents</strong></td><td><span class="badge-prop badge-blue">Multi-Agent</span></td><td>Multiple crowd groups are routed simultaneously by the central system.</td></tr>
+      <tr><td><strong>Knowledge</strong></td><td><span class="badge-prop badge-green">Known</span></td><td>Full knowledge of venue graph, exit locations, and corridor capacities.</td></tr>
+    </table>
+  </div>
+</div>
+</div>
+
+<!-- ══ RESULTS ════════════════════════════════════════ -->
+<div id="results" style="background:#fff;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+<div class="section reveal">
+  <div class="section-tag">05 — Results & Advantages</div>
+  <h2 class="section-title">Performance Outcomes &<br/>System Advantages</h2>
+  <div class="divider"></div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;margin-top:2rem">
+    <div class="card">
+      <div style="font-size:1.6rem;margin-bottom:.6rem">⚡</div>
+      <h3 style="font-weight:700;font-size:.95rem;margin-bottom:.4rem">Faster Route Discovery</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.6">BFS completes in microseconds for 150-node graphs, enabling routes for thousands simultaneously. Bidirectional Search reduces search space exponentially.</p>
+    </div>
+    <div class="card">
+      <div style="font-size:1.6rem;margin-bottom:.6rem">📊</div>
+      <h3 style="font-weight:700;font-size:.95rem;margin-bottom:.4rem">Congestion Reduction</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.6">Dynamic edge weighting ensures congested corridors are automatically disfavored. SA prevents the "popular exit" problem by explicitly distributing load.</p>
+    </div>
+    <div class="card">
+      <div style="font-size:1.6rem;margin-bottom:.6rem">🛡️</div>
+      <h3 style="font-weight:700;font-size:.95rem;margin-bottom:.4rem">Improved Safety</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.6">Crowd densities maintained below dangerous thresholds in real time. Emergency rerouting completed within seconds of a hazard alert.</p>
+    </div>
+    <div class="card">
+      <div style="font-size:1.6rem;margin-bottom:.6rem">🔄</div>
+      <h3 style="font-weight:700;font-size:.95rem;margin-bottom:.4rem">Real-Time Adaptability</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.6">Unlike static evacuation plans, the system adapts continuously. Blocked corridors trigger immediate graph updates and new path computation.</p>
+    </div>
+    <div class="card">
+      <div style="font-size:1.6rem;margin-bottom:.6rem">📈</div>
+      <h3 style="font-weight:700;font-size:.95rem;margin-bottom:.4rem">Scalability</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.6">The same framework applies to airports, shopping malls, pilgrimage sites, and city-wide events — simply by loading a different venue map.</p>
+    </div>
+    <div class="card">
+      <div style="font-size:1.6rem;margin-bottom:.6rem">🔗</div>
+      <h3 style="font-weight:700;font-size:.95rem;margin-bottom:.4rem">IoT Integration</h3>
+      <p style="font-size:.85rem;color:var(--muted);line-height:1.6">Seamlessly integrates with sensor networks, thermal cameras, Bluetooth/Wi-Fi density analysis, and computer vision systems.</p>
+    </div>
+  </div>
+
+  <!-- Limitations -->
+  <div style="margin-top:3rem" class="reveal">
+    <h3 style="font-weight:700;margin-bottom:.5rem;font-size:1.05rem">Known Limitations & Challenges</h3>
+    <p style="color:var(--muted);font-size:.875rem;margin-bottom:1.25rem">Every system has constraints. These are the key challenges to address in future work.</p>
+    <div class="lim-grid">
+      <div class="lim-card" data-icon="📡">
+        <h4>Real-Time Data Dependency</h4>
+        <p>Sensor failures or signal interference introduce stale data, leading to suboptimal routing recommendations.</p>
+      </div>
+      <div class="lim-card" data-icon="💻">
+        <h4>Computational Overhead</h4>
+        <p>SA has no guaranteed convergence time. For extremely complex venues, optimization may lag real-world conditions.</p>
+      </div>
+      <div class="lim-card" data-icon="👥">
+        <h4>Human Compliance</h4>
+        <p>People may ignore digital signage or take familiar paths regardless of system guidance. Human marshals remain essential.</p>
+      </div>
+      <div class="lim-card" data-icon="💰">
+        <h4>Infrastructure Cost</h4>
+        <p>Full deployment requires sensor networks, cameras, centralized computing, and digital signage — potentially cost-prohibitive for older venues.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ CONCLUSION ═════════════════════════════════════ -->
+<div id="conclusion">
+<div class="section reveal">
+  <div class="section-tag">06 — Conclusion</div>
+  <h2 class="section-title">A Life-Saving Technology<br/>for Modern Events</h2>
+  <div class="divider"></div>
+
+  <div class="conclusion-box reveal" style="margin-top:2rem">
+    <h3 style="font-family:'Playfair Display',serif;font-size:1.4rem;margin-bottom:1.5rem;color:#fff">Key Takeaways</h3>
+    <div class="takeaway"><span class="takeaway-num">01</span><span>Graph-based venue modeling provides a rigorous mathematical foundation for crowd management — turning a physical space into a solvable computational problem.</span></div>
+    <div class="takeaway"><span class="takeaway-num">02</span><span>BFS guarantees fast, correct evacuation route discovery with <strong style="color:var(--teal)">O(V+E)</strong> complexity — completing in microseconds for typical stadium graphs.</span></div>
+    <div class="takeaway"><span class="takeaway-num">03</span><span>Bidirectional Search delivers <strong style="color:var(--teal)">exponential speedups</strong> — exploring ~512× fewer nodes on a branching factor 4, depth 10 graph.</span></div>
+    <div class="takeaway"><span class="takeaway-num">04</span><span>Simulated Annealing provides <strong style="color:var(--teal)">dynamic, globally-aware</strong> congestion optimization — preventing the "popular exit" problem across all evacuation routes.</span></div>
+    <div class="takeaway"><span class="takeaway-num">05</span><span>Combined, these techniques form a <strong style="color:var(--teal)">scalable, adaptable, and genuinely life-saving</strong> system for any large-scale event or venue worldwide.</span></div>
+  </div>
+
+  <!-- References -->
+  <div style="margin-top:3rem" class="reveal">
+    <h3 style="font-weight:700;margin-bottom:1rem;font-size:1rem">References</h3>
+    <div style="display:grid;gap:.6rem">
+      <div style="font-size:.82rem;color:var(--muted);line-height:1.6;padding:.6rem 0;border-bottom:1px solid var(--border)">1. Cormen, T. H. et al. (2022). <em>Introduction to Algorithms</em> (4th ed.). MIT Press.</div>
+      <div style="font-size:.82rem;color:var(--muted);line-height:1.6;padding:.6rem 0;border-bottom:1px solid var(--border)">2. Kirkpatrick, S., Gelatt, C. D., & Vecchi, M. P. (1983). Optimization by Simulated Annealing. <em>Science</em>, 220(4598), 671–680.</div>
+      <div style="font-size:.82rem;color:var(--muted);line-height:1.6;padding:.6rem 0;border-bottom:1px solid var(--border)">3. Pohl, I. (1971). Bi-Directional Search. <em>Machine Intelligence</em>, 6, 127–140.</div>
+      <div style="font-size:.82rem;color:var(--muted);line-height:1.6;padding:.6rem 0;border-bottom:1px solid var(--border)">4. Helbing, D., Farkas, I., & Vicsek, T. (2000). Simulating Dynamical Features of Escape Panic. <em>Nature</em>, 407, 487–490.</div>
+      <div style="font-size:.82rem;color:var(--muted);line-height:1.6;padding:.6rem 0;border-bottom:1px solid var(--border)">5. Still, G. K. (2000). <em>Crowd Dynamics</em>. PhD Thesis, University of Warwick.</div>
+      <div style="font-size:.82rem;color:var(--muted);line-height:1.6;padding:.6rem 0">6. Zheng, X., Zhong, T., & Liu, M. (2009). Modeling Crowd Evacuation via Multi-Agent Simulation. <em>Safety Science</em>, 47(8), 1066–1075.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:3rem;padding:1.5rem;background:var(--teal-lt);border-radius:var(--r);border:1.5px solid var(--teal);text-align:center;font-size:.85rem;color:var(--teal)">
+    <strong>Department of Computer Science and Engineering</strong><br/>
+    ARTIFICIAL INTELLIGENCE · CSEN2031 · Batch-02
+  </div>
+</div>
+</div>
+
+<script>
+// ══ HERO CANVAS — Node Graph Animation ══════════════════
+(function(){
+  const c=document.getElementById('heroCanvas');
+  const ctx=c.getContext('2d');
+  let W,H,nodes=[],edges=[],particles=[];
+
+  function resize(){W=c.width=c.offsetWidth;H=c.height=c.offsetHeight}
+  resize();window.addEventListener('resize',resize);
+
+  function init(){
+    nodes=[];edges=[];particles=[];
+    const count=22;
+    const types=['gate','junction','exit'];
+    for(let i=0;i<count;i++){
+      nodes.push({
+        x:80+Math.random()*(W-160),y:60+Math.random()*(H-120),
+        type:types[Math.floor(Math.random()*3)],
+        r:i<3?8:5,pulse:Math.random()*Math.PI*2,
+        vx:(Math.random()-.5)*.15,vy:(Math.random()-.5)*.15
+      });
+    }
+    for(let i=0;i<count;i++){
+      for(let j=i+1;j<count;j++){
+        const d=dist(nodes[i],nodes[j]);
+        if(d<160&&edges.length<35)edges.push({a:i,b:j,load:Math.random()});
+      }
+    }
+    for(let i=0;i<12;i++) spawnParticle();
+  }
+
+  function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+
+  function spawnParticle(){
+    if(edges.length===0)return;
+    const e=edges[Math.floor(Math.random()*edges.length)];
+    particles.push({edge:e,t:0,speed:.003+Math.random()*.004,fwd:Math.random()>.5});
+  }
+
+  function tick(){
+    ctx.clearRect(0,0,W,H);
+    const t=Date.now()/1000;
+
+    // edges
+    edges.forEach(e=>{
+      const a=nodes[e.a],b=nodes[e.b];
+      const load=e.load;
+      const col=load>.7?`rgba(239,68,68,${.15+load*.2})`:`rgba(0,107,94,${.1+load*.15})`;
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+      ctx.strokeStyle=col;ctx.lineWidth=1+load*1.5;ctx.stroke();
+    });
+
+    // nodes
+    nodes.forEach((n,i)=>{
+      n.pulse+=.02;
+      n.x+=n.vx;n.y+=n.vy;
+      if(n.x<40||n.x>W-40)n.vx*=-1;
+      if(n.y<40||n.y>H-40)n.vy*=-1;
+
+      let col,ring;
+      if(n.type==='gate'){col='#f59e0b';ring='rgba(245,158,11,.2)'}
+      else if(n.type==='exit'){col='#10b981';ring='rgba(16,185,129,.2)'}
+      else{col='#6366f1';ring='rgba(99,102,241,.15)'}
+
+      const pulse=Math.sin(n.pulse)*.3+.7;
+      ctx.beginPath();ctx.arc(n.x,n.y,n.r*2.5,0,Math.PI*2);
+      ctx.fillStyle=ring;ctx.fill();
+      ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+      ctx.fillStyle=col;ctx.fill();
+    });
+
+    // particles
+    particles.forEach((p,i)=>{
+      p.t+=p.speed*(p.fwd?1:-1);
+      if(p.t>1||p.t<0){p.t=p.fwd?0:1;p.fwd=!p.fwd;p.edge=edges[Math.floor(Math.random()*edges.length)]}
+      const a=nodes[p.edge.a],b=nodes[p.edge.b];
+      const x=a.x+(b.x-a.x)*p.t,y=a.y+(b.y-a.y)*p.t;
+      ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,.7)';ctx.fill();
+    });
+
+    requestAnimationFrame(tick);
+  }
+  init();tick();
+})();
+
+// ══ VENUE CANVAS — Stadium Simulation ═══════════════════
+(function(){
+  const c=document.getElementById('venueCanvas');
+  const ctx=c.getContext('2d');
+  c.width=c.parentElement.offsetWidth;
+  c.height=420;
+  const W=c.width,H=420;
+
+  const nodes=[
+    {id:'G1',x:60,y:100,type:'gate',label:'G1'},
+    {id:'G2',x:60,y:210,type:'gate',label:'G2'},
+    {id:'G3',x:60,y:320,type:'gate',label:'G3'},
+    {id:'C1',x:190,y:100,type:'junction',label:'C1',load:.4},
+    {id:'C2',x:190,y:210,type:'junction',label:'C2',load:.85},
+    {id:'C3',x:190,y:320,type:'junction',label:'C3',load:.3},
+    {id:'H1',x:340,y:140,type:'hall',label:'H1',load:.6},
+    {id:'H2',x:340,y:280,type:'hall',label:'H2',load:.9},
+    {id:'S1',x:460,y:210,type:'stair',label:'S1',load:.5},
+    {id:'E1',x:W-60,y:80,type:'exit',label:'E1'},
+    {id:'E2',x:W-60,y:210,type:'exit',label:'E2'},
+    {id:'E3',x:W-60,y:340,type:'exit',label:'E3'},
+  ];
+
+  const edges=[
+    ['G1','C1',1],['G2','C2',1],['G3','C3',1],
+    ['C1','H1',1],['C2','H1',1],['C2','H2',1],['C3','H2',1],
+    ['C1','C2',1],['C2','C3',1],
+    ['H1','S1',1],['H2','S1',1],
+    ['H1','E1',1],['S1','E2',1],['H2','E3',1],
+  ];
+
+  const nodeMap={};nodes.forEach(n=>nodeMap[n.id]=n);
+
+  const particles=[];
+  for(let i=0;i<30;i++){
+    const e=edges[Math.floor(Math.random()*edges.length)];
+    particles.push({
+      from:e[0],to:e[1],t:Math.random(),
+      speed:.004+Math.random()*.006,
+    });
+  }
+
+  let congestionT=0;
+
+  function tick(){
+    ctx.clearRect(0,0,W,H);
+    congestionT+=.01;
+
+    // draw edges
+    edges.forEach(([a,b])=>{
+      const na=nodeMap[a],nb=nodeMap[b];
+      const load=(na.load||0+nb.load||0)/2||.3;
+      const col=load>.75?`rgba(220,38,38,.6)`:load>.5?`rgba(245,158,11,.5)`:`rgba(0,107,94,.4)`;
+      ctx.beginPath();ctx.moveTo(na.x,na.y);ctx.lineTo(nb.x,nb.y);
+      ctx.strokeStyle=col;ctx.lineWidth=load>0.75?3:2;ctx.stroke();
+
+      // edge weight label
+      const mx=(na.x+nb.x)/2,my=(na.y+nb.y)/2;
+      ctx.fillStyle='rgba(255,255,255,.5)';
+      ctx.font='10px JetBrains Mono,monospace';
+      ctx.fillText(`w=${(1+load*4).toFixed(1)}`,mx-14,my-4);
+    });
+
+    // dynamic congestion pulse
+    nodes.forEach(n=>{
+      if(n.load)n.load=Math.min(.95,Math.max(.1,n.load+Math.sin(congestionT+(n.x/100))*.03));
+    });
+
+    // draw nodes
+    nodes.forEach(n=>{
+      let fill,ring,size;
+      if(n.type==='gate'){fill='#f59e0b';ring='rgba(245,158,11,.25)';size=14}
+      else if(n.type==='exit'){fill='#10b981';ring='rgba(16,185,129,.25)';size=16}
+      else if(n.type==='hall'){
+        const hot=n.load>.75;
+        fill=hot?'#ef4444':'#6366f1';
+        ring=hot?'rgba(239,68,68,.3)':'rgba(99,102,241,.2)';size=18;
+      }
+      else{fill='#8b5cf6';ring='rgba(139,92,246,.2)';size=12}
+
+      // pulse ring
+      ctx.beginPath();ctx.arc(n.x,n.y,size+6+Math.sin(congestionT*2+n.x)*.03,0,Math.PI*2);
+      ctx.fillStyle=ring;ctx.fill();
+      // main node
+      ctx.beginPath();ctx.arc(n.x,n.y,size,0,Math.PI*2);
+      ctx.fillStyle=fill;ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,.4)';ctx.lineWidth=1.5;ctx.stroke();
+
+      // label
+      ctx.fillStyle='#fff';
+      ctx.font=`bold ${n.type==='hall'?'11':'10'}px DM Sans,sans-serif`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(n.label,n.x,n.y);
+
+      // load bar above hall/junction
+      if(n.load){
+        const bw=36,bh=5,bx=n.x-bw/2,by=n.y-size-12;
+        ctx.fillStyle='rgba(255,255,255,.15)';ctx.fillRect(bx,by,bw,bh);
+        const fc=n.load>.75?'#ef4444':n.load>.5?'#f59e0b':'#10b981';
+        ctx.fillStyle=fc;ctx.fillRect(bx,by,bw*n.load,bh);
+      }
+    });
+
+    // particles
+    particles.forEach(p=>{
+      p.t+=p.speed;
+      if(p.t>=1){
+        p.t=0;
+        const e=edges[Math.floor(Math.random()*edges.length)];
+        p.from=e[0];p.to=e[1];
+      }
+      const a=nodeMap[p.from],b=nodeMap[p.to];
+      if(!a||!b)return;
+      const x=a.x+(b.x-a.x)*p.t,y=a.y+(b.y-a.y)*p.t;
+      ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,.8)';ctx.fill();
+    });
+
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
+
+// ══ GRID PATHFINDING VISUALIZER ═══════════════════════════
+const ROWS=6,COLS=8;
+const START=[2,0],GOAL=[2,7];
+const WALLS_DEFAULT=[[0,2],[1,2],[3,2],[4,2],[1,5],[3,5],[0,6],[4,6]];
+
+let grids={};
+['bfs','bidir','gbfs','dfs','ucs','astar'].forEach(id=>{
+  grids[id]=buildGrid();
+  renderGrid(id);
+});
+
+function buildGrid(){
+  const g=[];
+  for(let r=0;r<ROWS;r++){
+    g.push([]);
+    for(let c=0;c<COLS;c++){
+      let type='empty';
+      if(r===START[0]&&c===START[1])type='start';
+      else if(r===GOAL[0]&&c===GOAL[1])type='goal';
+      else if(WALLS_DEFAULT.some(w=>w[0]===r&&w[1]===c))type='wall';
+      g[r].push({type,visited:false,path:false,frontier:false,cost:Infinity,label:''});
+    }
+  }
+  return g;
+}
+
+function renderGrid(id){
+  const g=grids[id];
+  const container=document.getElementById(id+'Grid');
+  container.innerHTML='';
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const cell=g[r][c];
+      const div=document.createElement('div');
+      let cls='bfs-cell ';
+      if(cell.path)cls+='path';
+      else if(cell.frontier)cls+='frontier';
+      else if(cell.visited)cls+='visited';
+      else cls+=cell.type;
+      div.className=cls;
+      div.textContent=cell.label||(cell.type==='start'?'S':cell.type==='goal'?'G':cell.type==='wall'?'█':'');
+      container.appendChild(div);
+    }
+  }
+}
+
+function resetGrid(id){
+  grids[id]=buildGrid();
+  renderGrid(id);
+  const log=document.getElementById(id+'Log');
+  if(log)log.innerHTML='<div class="log-entry" style="color:#9ca3af">Press ▶ to start…</div>';
+  const vc=document.getElementById(id+'VisitedCount');
+  const pl=document.getElementById(id+'PathLen');
+  if(vc)vc.textContent='0';if(pl)pl.textContent='0';
+}
+
+function addLog(logId,msg,cls=''){
+  const log=document.getElementById(logId);
+  if(!log)return;
+  const div=document.createElement('div');
+  div.className='log-entry '+cls;
+  div.textContent=msg;
+  log.appendChild(div);
+  log.scrollTop=log.scrollHeight;
+}
+
+function neighbors(r,c,g){
+  return[[r-1,c],[r+1,c],[r,c-1],[r,c+1]]
+    .filter(([nr,nc])=>nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&g[nr][nc].type!=='wall');
+}
+
+async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+
+// BFS
+async function runBFS(){
+  const g=grids['bfs'];
+  const speed=parseInt(document.getElementById('bfsSpeed').value);
+  const log='bfsLog';
+  document.getElementById(log).innerHTML='';
+  addLog(log,'BFS started from S=(2,0) → Goal G=(2,7)');
+
+  const queue=[[...START,null]];
+  const prev={};
+  prev[START.join(',')]=null;
+  let visited=0;
+
+  while(queue.length){
+    const [r,c,_]=queue.shift();
+    const key=r+','+c;
+
+    if(g[r][c].type!=='start'&&g[r][c].type!=='goal'){
+      g[r][c].visited=true;renderGrid('bfs');
+    }
+    visited++;
+    document.getElementById('bfsVisitedCount').textContent=visited;
+    addLog(log,`Visiting (${r},${c})`);
+    await sleep(speed);
+
+    if(r===GOAL[0]&&c===GOAL[1]){
+      addLog(log,'🎯 Goal reached! Reconstructing path…','found');
+      let cur=key;const path=[];
+      while(cur){path.unshift(cur);cur=prev[cur];}
+      for(const k of path){
+        const [pr,pc]=k.split(',').map(Number);
+        if(g[pr][pc].type!=='start'&&g[pr][pc].type!=='goal'){
+          g[pr][pc].path=true;g[pr][pc].visited=false;renderGrid('bfs');
+          await sleep(80);
+        }
+      }
+      document.getElementById('bfsPathLen').textContent=path.length-1;
+      addLog(log,`✅ Shortest path: ${path.length-1} hops`,'highlight');
+      return;
+    }
+
+    for(const [nr,nc] of neighbors(r,c,g)){
+      const nk=nr+','+nc;
+      if(!(nk in prev)){
+        prev[nk]=key;
+        g[nr][nc].frontier=true;renderGrid('bfs');
+        queue.push([nr,nc,key]);
+        await sleep(speed/3);
+        g[nr][nc].frontier=false;
+      }
+    }
+  }
+  addLog(log,'❌ No path found.','highlight');
+}
+
+// BIDIRECTIONAL
+async function runBidir(){
+  const g=grids['bidir'];
+  g.forEach((row,r)=>row.forEach((cell,c)=>{cell.visited=false;cell.path=false;cell.frontier=false;cell.label=''}));
+
+  const fPrev={[START.join(',')]:null};
+  const bPrev={[GOAL.join(',')]:null};
+  const fQ=[[...START]];const bQ=[[...GOAL]];
+  let fVis=0,bVis=0,step=0;
+
+  document.getElementById('bidirLog').innerHTML='';
+  addLog('bidirLog','Bidirectional search: forward from S, backward from G');
+
+  async function expandFwd(){
+    if(!fQ.length)return null;
+    const [r,c]=fQ.shift();
+    const k=r+','+c;
+    if(g[r][c].type!=='start'){g[r][c].visited=true;g[r][c].label='F';renderGrid('bidir');}
+    fVis++;document.getElementById('bidirFwd').textContent=fVis;
+    for(const [nr,nc] of neighbors(r,c,g)){
+      const nk=nr+','+nc;
+      if(!(nk in fPrev)){
+        fPrev[nk]=k;fQ.push([nr,nc]);
+        if(nk in bPrev)return nk; // meeting!
+      }
+    }
+    return null;
+  }
+
+  async function expandBwd(){
+    if(!bQ.length)return null;
+    const [r,c]=bQ.shift();
+    const k=r+','+c;
+    if(g[r][c].type!=='goal'){
+      g[r][c].frontier=true;g[r][c].label='B';renderGrid('bidir');
+    }
+    bVis++;document.getElementById('bidirBwd').textContent=bVis;
+    for(const [nr,nc] of neighbors(r,c,g)){
+      const nk=nr+','+nc;
+      if(!(nk in bPrev)){
+        bPrev[nk]=k;bQ.push([nr,nc]);
+        if(nk in fPrev)return nk;
+      }
+    }
+    return null;
+  }
+
+  let meeting=null;
+  while(!meeting&&(fQ.length||bQ.length)){
+    meeting=await expandFwd();if(meeting)break;
+    meeting=await expandBwd();if(meeting)break;
+    await sleep(180);step++;
+  }
+
+  if(!meeting){addLog('bidirLog','❌ No path found.','highlight');return;}
+
+  addLog('bidirLog',`🤝 Frontiers met at (${meeting.replace(',','  ')})!`,'found');
+  // reconstruct
+  const path=[];
+  let cur=meeting;while(cur){path.unshift(cur);cur=fPrev[cur];}
+  let cur2=bPrev[meeting];while(cur2){path.push(cur2);cur2=bPrev[cur2];}
+  for(const k of path){
+    const [pr,pc]=k.split(',').map(Number);
+    g[pr][pc].visited=false;g[pr][pc].frontier=false;g[pr][pc].path=true;g[pr][pc].label='';
+    renderGrid('bidir');await sleep(100);
+  }
+  document.getElementById('bidirPath').textContent=path.length-1;
+  addLog('bidirLog',`✅ Path length: ${path.length-1} hops`,'highlight');
+}
+
+// GBFS
+async function runGBFS(){
+  const g=grids['gbfs'];
+  document.getElementById('gbfsLog').innerHTML='';
+  addLog('gbfsLog','GBFS: always expand closest to goal by h(n)=Manhattan');
+  const h=(r,c)=>Math.abs(r-GOAL[0])+Math.abs(c-GOAL[1]);
+  const pq=[[h(START[0],START[1]),...START]];
+  const prev={[START.join(',')]:null};
+
+  while(pq.length){
+    pq.sort((a,b)=>a[0]-b[0]);
+    const [hn,r,c]=pq.shift();
+    const k=r+','+c;
+    if(g[r][c].type!=='start'&&g[r][c].type!=='goal'){g[r][c].visited=true;renderGrid('gbfs');}
+    addLog('gbfsLog',`h(${r},${c})=${hn}`);
+    await sleep(150);
+    if(r===GOAL[0]&&c===GOAL[1]){
+      addLog('gbfsLog','🎯 Goal reached!','found');
+      let cur=k;const path=[];
+      while(cur){path.unshift(cur);cur=prev[cur];}
+      for(const k of path){const[pr,pc]=k.split(',').map(Number);if(g[pr][pc].type!=='start'&&g[pr][pc].type!=='goal'){g[pr][pc].path=true;g[pr][pc].visited=false;renderGrid('gbfs');await sleep(80);}}
+      addLog('gbfsLog',`Path length: ${path.length-1} (may not be shortest)`,'highlight');return;
+    }
+    for(const[nr,nc] of neighbors(r,c,g)){
+      const nk=nr+','+nc;
+      if(!(nk in prev)){prev[nk]=k;pq.push([h(nr,nc),nr,nc]);}
+    }
+  }
+}
+
+// DFS
+async function runDFS(){
+  const g=grids['dfs'];
+  document.getElementById('dfsLog').innerHTML='';
+  addLog('dfsLog','DFS: explore deeply before backtracking');
+  const stack=[[...START]];
+  const prev={[START.join(',')]:null};
+  const visited=new Set();
+
+  while(stack.length){
+    const [r,c]=stack.pop();
+    const k=r+','+c;
+    if(visited.has(k))continue;
+    visited.add(k);
+    if(g[r][c].type!=='start'&&g[r][c].type!=='goal'){g[r][c].visited=true;renderGrid('dfs');}
+    addLog('dfsLog',`DFS visit (${r},${c})`);
+    await sleep(160);
+    if(r===GOAL[0]&&c===GOAL[1]){
+      addLog('dfsLog','🎯 Goal reached (not necessarily shortest)!','found');
+      let cur=k;const path=[];
+      while(cur){path.unshift(cur);cur=prev[cur];}
+      for(const k of path){const[pr,pc]=k.split(',').map(Number);if(g[pr][pc].type!=='start'&&g[pr][pc].type!=='goal'){g[pr][pc].path=true;g[pr][pc].visited=false;renderGrid('dfs');await sleep(80);}}
+      addLog('dfsLog',`Path: ${path.length-1} hops (DFS — not optimal)`,'highlight');return;
+    }
+    for(const[nr,nc] of neighbors(r,c,g)){
+      const nk=nr+','+nc;
+      if(!visited.has(nk)){prev[nk]=prev[nk]||k;stack.push([nr,nc]);}
+    }
+  }
+  addLog('dfsLog','❌ No path found.','highlight');
+}
+
+// UCS
+async function runUCS(){
+  const g=grids['ucs'];
+  document.getElementById('ucsLog').innerHTML='';
+  addLog('ucsLog','UCS: expand lowest-cost node (all edge costs = 1)');
+  const pq=[[0,...START]];
+  const cost={[START.join(',')]:0};
+  const prev={[START.join(',')]:null};
+
+  while(pq.length){
+    pq.sort((a,b)=>a[0]-b[0]);
+    const[gc,r,c]=pq.shift();
+    const k=r+','+c;
+    if(gc>cost[k])continue;
+    if(g[r][c].type!=='start'&&g[r][c].type!=='goal'){g[r][c].visited=true;g[r][c].label=gc;renderGrid('ucs');}
+    addLog('ucsLog',`Cost(${r},${c})=${gc}`);
+    await sleep(150);
+    if(r===GOAL[0]&&c===GOAL[1]){
+      addLog('ucsLog',`🎯 Optimal cost: ${gc}`,'found');
+      let cur=k;const path=[];
+      while(cur){path.unshift(cur);cur=prev[cur];}
+      for(const k of path){const[pr,pc]=k.split(',').map(Number);if(g[pr][pc].type!=='start'&&g[pr][pc].type!=='goal'){g[pr][pc].path=true;g[pr][pc].visited=false;renderGrid('ucs');await sleep(80);}}
+      addLog('ucsLog',`✅ Shortest path: ${path.length-1} steps`,'highlight');return;
+    }
+    for(const[nr,nc] of neighbors(r,c,g)){
+      const nk=nr+','+nc;const nc2=gc+1;
+      if(nc2<(cost[nk]||Infinity)){cost[nk]=nc2;prev[nk]=k;pq.push([nc2,nr,nc]);}
+    }
+  }
+}
+
+// A*
+async function runAstar(){
+  const g=grids['astar'];
+  document.getElementById('astarLog').innerHTML='';
+  addLog('astarLog','A*: f(n) = g(n) + h(n). Optimal and efficient!');
+  const h=(r,c)=>Math.abs(r-GOAL[0])+Math.abs(c-GOAL[1]);
+  const pq=[[h(START[0],START[1]),0,...START]];
+  const gCost={[START.join(',')]:0};
+  const prev={[START.join(',')]:null};
+
+  while(pq.length){
+    pq.sort((a,b)=>a[0]-b[0]);
+    const[fn,gc,r,c]=pq.shift();
+    const k=r+','+c;
+    if(gc>gCost[k])continue;
+    if(g[r][c].type!=='start'&&g[r][c].type!=='goal'){
+      g[r][c].visited=true;g[r][c].label=fn;renderGrid('astar');
+    }
+    addLog('astarLog',`f(${r},${c})=g${gc}+h${h(r,c)}=${fn}`);
+    await sleep(150);
+    if(r===GOAL[0]&&c===GOAL[1]){
+      addLog('astarLog','🎯 Optimal path found!','found');
+      let cur=k;const path=[];
+      while(cur){path.unshift(cur);cur=prev[cur];}
+      for(const k of path){const[pr,pc]=k.split(',').map(Number);if(g[pr][pc].type!=='start'&&g[pr][pc].type!=='goal'){g[pr][pc].path=true;g[pr][pc].visited=false;renderGrid('astar');await sleep(80);}}
+      addLog('astarLog',`✅ A* path: ${path.length-1} hops`,'highlight');return;
+    }
+    for(const[nr,nc] of neighbors(r,c,g)){
+      const nk=nr+','+nc;const ng=gc+1;
+      if(ng<(gCost[nk]||Infinity)){gCost[nk]=ng;prev[nk]=k;pq.push([ng+h(nr,nc),ng,nr,nc]);}
+    }
+  }
+}
+
+// ══ ALGO TABS ════════════════════════════════════════════
+function switchAlgo(id){
+  document.querySelectorAll('.algo-tab').forEach((t,i)=>{
+    const ids=['bfs','bidir','gbfs','dfs','ucs','astar','sa'];
+    t.classList.toggle('active',ids[i]===id);
+  });
+  document.querySelectorAll('.algo-panel').forEach(p=>{
+    p.classList.toggle('active',p.id==='panel-'+id);
+  });
+}
+
+// ══ SIMULATED ANNEALING ══════════════════════════════════
+const caps={E1:500,E2:400,E3:300};
+let saRunning=false;
+let saHistory=[];
+let saCtx=null;
+
+function costFn(r){
+  let pen=0;
+  for(const[k,cap] of Object.entries(caps)){
+    const ratio=r[k]/cap;
+    if(ratio>.8)pen+=(ratio-.8)*1000;
+  }
+  return pen;
+}
+
+function perturb(r){
+  const keys=Object.keys(r);
+  const from=keys[Math.floor(Math.random()*keys.length)];
+  let to=from;while(to===from)to=keys[Math.floor(Math.random()*keys.length)];
+  const amt=Math.floor(Math.random()*30)+5;
+  const nr={...r};
+  if(nr[from]-amt<0)return r;
+  nr[from]-=amt;nr[to]+=amt;
+  return nr;
+}
+
+function updateBars(routes){
+  for(const[k,cap] of Object.entries(caps)){
+    const bar=document.getElementById('saBar'+k);
+    const pct=Math.min(100,(routes[k]/cap)*100);
+    bar.style.width=pct+'%';
+    bar.style.background=pct>80?'#ef4444':pct>60?'#f59e0b':'#10b981';
+    bar.setAttribute('data-val',`${routes[k]}/${cap}`);
+    bar.textContent=`${routes[k]}/${cap}`;
+  }
+}
+
+function drawSAChart(){
+  const c=document.getElementById('saChart');
+  if(!saCtx)saCtx=c.getContext('2d');
+  const ctx=saCtx;
+  c.width=c.parentElement.offsetWidth-20;c.height=220;
+  const W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);
+  if(!saHistory.length)return;
+
+  const maxC=Math.max(...saHistory,10);
+  ctx.beginPath();
+  saHistory.forEach((v,i)=>{
+    const x=(i/(saHistory.length-1||1))*(W-40)+20;
+    const y=H-20-(v/maxC)*(H-40);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle='#ef4444';ctx.lineWidth=2;ctx.stroke();
+
+  // zero line
+  ctx.beginPath();ctx.moveTo(20,H-20);ctx.lineTo(W-20,H-20);
+  ctx.strokeStyle='rgba(0,107,94,.3)';ctx.lineWidth=1;ctx.stroke();
+
+  ctx.fillStyle='#9ca3af';ctx.font='11px DM Sans';
+  ctx.fillText('Cost',4,16);ctx.fillText('Optimal (0)',22,H-6);
+}
+
+async function runSA(){
+  if(saRunning)return;
+  saRunning=true;
+  saHistory=[];
+  let routes={E1:400,E2:350,E3:250};
+  let T=1000,cooling=0.95,iter=0;
+  updateBars(routes);
+
+  while(T>0.5){
+    const neighbor=perturb(routes);
+    const delta=costFn(neighbor)-costFn(routes);
+    if(delta<0||Math.random()<Math.exp(-delta/T)){routes=neighbor;}
+    const c=costFn(routes);
+    saHistory.push(c);
+    T*=cooling;iter++;
+    document.getElementById('saTemp').textContent=T.toFixed(1);
+    document.getElementById('saCost').textContent=c.toFixed(0);
+    document.getElementById('saIter').textContent=iter;
+    if(iter%5===0){updateBars(routes);drawSAChart();await sleep(16);}
+  }
+  updateBars(routes);drawSAChart();
+  saRunning=false;
+}
+
+function resetSA(){
+  saRunning=false;saHistory=[];
+  document.getElementById('saTemp').textContent='1000';
+  document.getElementById('saCost').textContent='—';
+  document.getElementById('saIter').textContent='0';
+  updateBars({E1:400,E2:350,E3:250});
+  drawSAChart();
+}
+
+// ══ SCROLL EFFECTS ════════════════════════════════════════
+const observer=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');}});
+},{threshold:.1});
+document.querySelectorAll('.reveal').forEach(el=>observer.observe(el));
+
+// counter animation
+function animateCount(el,target){
+  let start=0;const dur=1500;const t0=performance.now();
+  function frame(now){
+    const p=Math.min((now-t0)/dur,1);
+    const ease=1-Math.pow(1-p,3);
+    el.textContent=Math.round(start+(target-start)*ease).toLocaleString();
+    if(p<1)requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+const cObs=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      const t=parseInt(e.target.getAttribute('data-count'));
+      animateCount(e.target,t);
+      cObs.unobserve(e.target);
+    }
+  });
+},{threshold:.5});
+document.querySelectorAll('[data-count]').forEach(el=>cObs.observe(el));
+
+// nav + progress
+window.addEventListener('scroll',()=>{
+  const nav=document.getElementById('topnav');
+  nav.classList.toggle('visible',window.scrollY>window.innerHeight*.5);
+  const pct=(window.scrollY/(document.body.scrollHeight-window.innerHeight))*100;
+  document.getElementById('progress').style.width=pct+'%';
+});
+</script>
+</body>
+</html>
